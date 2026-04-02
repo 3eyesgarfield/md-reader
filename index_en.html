@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MD Reader</title>
+<style>
+:root {
+  --font-size: 18px;
+  --bg: #faf9f7;
+  --text: #2c2c2c;
+  --accent: #4a90d9;
+  --highlight: #fff3a8;
+  --sidebar-bg: #f0eeeb;
+  --toolbar-bg: #e8e6e3;
+  --border: #d4d0cc;
+  --reading-line: #e8f4fd;
+  --code-bg: #f0eeeb;
+  --pre-bg: #2d2d2d;
+  --pre-text: #e8e8e8;
+  --btn-bg: white;
+  --btn-hover: #e0e0e0;
+  --block-hover: rgba(74, 144, 217, 0.08);
+}
+[data-theme="dark"] {
+  --bg: #1a1714;
+  --text: #e8dcc8;
+  --accent: #d4a056;
+  --highlight: #3d2e12;
+  --sidebar-bg: #151210;
+  --toolbar-bg: #1e1a16;
+  --border: #3a322a;
+  --reading-line: #2a2218;
+  --code-bg: #2a2420;
+  --pre-bg: #12100e;
+  --pre-text: #d4c8b0;
+  --btn-bg: #2a2420;
+  --btn-hover: #3a322a;
+  --block-hover: rgba(212, 160, 86, 0.1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Toolbar */
+.toolbar {
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.toolbar button {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--btn-bg);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.toolbar button:hover { background: var(--btn-hover); }
+.toolbar button.active { background: var(--accent); color: white; border-color: var(--accent); }
+.toolbar .separator { width: 1px; height: 24px; background: var(--border); }
+.toolbar label { font-size: 13px; color: #666; white-space: nowrap; }
+.toolbar input[type="range"] { width: 100px; cursor: pointer; }
+.toolbar select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--btn-bg); color: var(--text); }
+.toolbar .font-size-display { font-size: 13px; color: #666; min-width: 36px; text-align: center; }
+
+/* Main layout */
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 260px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.2s;
+}
+.sidebar.collapsed { width: 0; overflow: hidden; border: none; }
+.sidebar-header {
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sidebar-header button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: #888;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.sidebar-header button:hover { background: var(--btn-hover); }
+.bookmark-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.bookmark-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  transition: background 0.1s;
+}
+.bookmark-item:hover { background: var(--btn-hover); }
+.bookmark-item .bm-info { flex: 1; min-width: 0; }
+.bookmark-item .bm-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bookmark-item .bm-preview {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bookmark-item .bm-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ccc;
+  font-size: 14px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.bookmark-item .bm-delete:hover { color: #e55; }
+.no-bookmarks {
+  text-align: center;
+  color: #aaa;
+  font-size: 13px;
+  padding: 30px 16px;
+}
+
+/* Content area */
+.content-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px 60px;
+  scroll-behavior: smooth;
+}
+.content.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.drop-hint {
+  text-align: center;
+  color: #bbb;
+  font-size: 16px;
+  line-height: 2;
+}
+.drop-hint .icon { font-size: 48px; margin-bottom: 10px; }
+
+/* Markdown rendered content */
+.md-body {
+  max-width: 800px;
+  margin: 0 auto;
+  font-size: var(--font-size);
+  line-height: 1.8;
+}
+.md-body h1 { font-size: 1.8em; margin: 0.8em 0 0.4em; border-bottom: 2px solid var(--border); padding-bottom: 0.3em; }
+.md-body h2 { font-size: 1.5em; margin: 0.7em 0 0.3em; }
+.md-body h3 { font-size: 1.25em; margin: 0.6em 0 0.3em; }
+.md-body h4, .md-body h5, .md-body h6 { font-size: 1.1em; margin: 0.5em 0 0.2em; }
+.md-body p { margin: 0.6em 0; }
+.md-body ul, .md-body ol { margin: 0.5em 0; padding-left: 2em; }
+.md-body li { margin: 0.2em 0; }
+.md-body blockquote {
+  border-left: 4px solid var(--accent);
+  padding: 0.5em 1em;
+  margin: 0.6em 0;
+  background: rgba(74,144,217,0.06);
+  border-radius: 0 6px 6px 0;
+}
+.md-body code {
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+}
+.md-body pre {
+  background: var(--pre-bg);
+  color: var(--pre-text);
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.6em 0;
+}
+.md-body pre code { background: none; padding: 0; color: inherit; }
+.md-body table { border-collapse: collapse; margin: 0.6em 0; width: 100%; }
+.md-body th, .md-body td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+.md-body th { background: var(--sidebar-bg); font-weight: 600; color: var(--text); }
+.md-body img { max-width: 100%; border-radius: 6px; }
+.md-body hr { border: none; border-top: 2px solid var(--border); margin: 1.5em 0; }
+.md-body a { color: var(--accent); text-decoration: none; }
+.md-body a:hover { text-decoration: underline; }
+
+/* Readable blocks - each clickable text unit */
+.readable-block {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 0.15s;
+}
+.readable-block:hover {
+  background: var(--block-hover);
+}
+.readable-block.reading {
+  background: var(--highlight) !important;
+  box-shadow: -4px 0 0 0 var(--accent);
+}
+
+/* Status bar */
+.status-bar {
+  background: var(--toolbar-bg);
+  border-top: 1px solid var(--border);
+  padding: 4px 16px;
+  font-size: 12px;
+  color: #888;
+  display: flex;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+/* Progress bar */
+.progress-bar {
+  height: 3px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.progress-bar .progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.3s;
+}
+
+/* Character-level follow highlight */
+.char-span { transition: color 0.1s, text-shadow 0.1s; }
+.char-span.char-read {
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent);
+}
+
+/* File input hidden */
+#fileInput { display: none; }
+
+/* Drag overlay */
+.drag-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(74,144,217,0.15);
+  border: 3px dashed var(--accent);
+  z-index: 999;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: var(--accent);
+  pointer-events: none;
+}
+.drag-overlay.show { display: flex; }
+
+/* Reading indicator animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.reading-indicator {
+  display: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e55;
+  animation: pulse 1s infinite;
+}
+.reading-indicator.active { display: inline-block; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button id="btnOpen" title="Open folder (with image support)">📂 Folder</button>
+  <button id="btnOpenFile" title="Open a single Markdown file">📄 File</button>
+  <input type="file" id="fileInput" accept=".md,.markdown,.txt">
+  <div class="separator"></div>
+  <button id="btnToggleSidebar" title="Toggle bookmarks">📑</button>
+  <button id="btnAddBookmark" title="Add bookmark">🔖 Bookmark</button>
+  <div class="separator"></div>
+  <label>Size</label>
+  <button id="btnFontDec">A-</button>
+  <span class="font-size-display" id="fontSizeDisplay">18</span>
+  <button id="btnFontInc">A+</button>
+  <div class="separator"></div>
+  <label>Speed</label>
+  <input type="range" id="rateSlider" min="0.5" max="10" step="0.1" value="1">
+  <span id="rateDisplay">1.0x</span>
+  <div class="separator"></div>
+  <label>Voice</label>
+  <select id="voiceSelect"></select>
+  <div class="separator"></div>
+  <button id="btnStop" title="Stop reading">⏹ Stop</button>
+  <div class="separator"></div>
+  <button id="btnFollowHighlight" title="Highlight words as they are read">💡 Follow</button>
+  <div class="separator"></div>
+  <button id="btnTheme" title="Toggle dark/light mode">🌙</button>
+  <span class="reading-indicator" id="readingIndicator"></span>
+</div>
+
+<div class="main">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span>📑 Bookmarks</span>
+      <button id="btnClearBookmarks" title="Clear all bookmarks">🗑</button>
+    </div>
+    <div class="bookmark-list" id="bookmarkList">
+      <div class="no-bookmarks">No bookmarks yet</div>
+    </div>
+  </div>
+
+  <div class="content-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="content empty" id="contentArea">
+      <div class="drop-hint">
+        <div class="icon">📖</div>
+        <div>Drop a Markdown file or folder here</div>
+        <div>or click "Folder" / "File" to open</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span id="statusLeft">Ready</span>
+  <span id="statusRight"></span>
+</div>
+
+<div class="drag-overlay" id="dragOverlay">Drop to open</div>
+
+<!-- Dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/markdown-it@14/dist/markdown-it.min.js"></script>
+<script type="module">
+// ============================================================
+// Pretext - import from esm.sh
+// ============================================================
+let pretextModule = null;
+try {
+  pretextModule = await import('https://esm.sh/@chenglou/pretext');
+} catch (e) {
+  console.warn('Pretext failed to load, using fallback', e);
+}
+
+// ============================================================
+// App State
+// ============================================================
+const state = {
+  fileName: '',
+  rawMarkdown: '',
+  blocks: [],          // Array of { el, text, index }
+  currentBlock: -1,
+  isReading: false,
+  fontSize: 18,
+  rate: 1.0,
+  selectedVoice: null,
+  bookmarks: JSON.parse(localStorage.getItem('md-reader-bookmarks') || '[]'),
+  utteranceQueue: [],
+  currentUtterance: null,
+  readingSeq: 0,  // sequence number to invalidate stale callbacks
+  // Pretext prepared cache: Map<blockIndex, prepared>
+  pretextCache: new Map(),
+  followHighlight: false,
+  savedBlockHTML: null,  // saved innerHTML before char wrapping
+};
+
+// ============================================================
+// DOM refs
+// ============================================================
+const $ = id => document.getElementById(id);
+const contentArea = $('contentArea');
+const fileInput = $('fileInput');
+const voiceSelect = $('voiceSelect');
+const rateSlider = $('rateSlider');
+const rateDisplay = $('rateDisplay');
+const fontSizeDisplay = $('fontSizeDisplay');
+const progressFill = $('progressFill');
+const statusLeft = $('statusLeft');
+const statusRight = $('statusRight');
+const bookmarkList = $('bookmarkList');
+const readingIndicator = $('readingIndicator');
+const sidebar = $('sidebar');
+const dragOverlay = $('dragOverlay');
+
+// ============================================================
+// Markdown-it setup
+// ============================================================
+const md = window.markdownit({
+  html: true,
+  linkify: true,
+  typographer: true,
+  breaks: true,
+});
+
+// Override image renderer to resolve local images from folder
+const defaultImageRender = md.renderer.rules.image ||
+  function(tokens, idx, options, env, self) { return self.renderToken(tokens, idx, options); };
+
+md.renderer.rules.image = function(tokens, idx, options, env, self) {
+  const token = tokens[idx];
+  const srcIndex = token.attrIndex('src');
+  if (srcIndex >= 0) {
+    const originalSrc = token.attrs[srcIndex][1];
+    token.attrs[srcIndex][1] = resolveImageUrl(originalSrc);
+  }
+  return defaultImageRender(tokens, idx, options, env, self);
+};
+
+// ============================================================
+// Voice setup
+// ============================================================
+let voices = [];
+
+function loadVoices() {
+  voices = speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+
+  // Prioritize English voices
+  const sorted = [...voices].sort((a, b) => {
+    const aEn = a.lang.startsWith('en') ? -1 : 0;
+    const bEn = b.lang.startsWith('en') ? -1 : 0;
+    return aEn - bEn;
+  });
+
+  let picked = false;
+  sorted.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = voices.indexOf(v);
+    opt.textContent = `${v.name} (${v.lang})`;
+    if (!picked && v.lang.startsWith('en')) {
+      opt.selected = true;
+      state.selectedVoice = v;
+      picked = true;
+    }
+    voiceSelect.appendChild(opt);
+  });
+
+  if (!state.selectedVoice && sorted.length > 0) {
+    state.selectedVoice = sorted[0];
+    voiceSelect.value = voices.indexOf(state.selectedVoice);
+  }
+}
+
+speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+voiceSelect.addEventListener('change', () => {
+  state.selectedVoice = voices[parseInt(voiceSelect.value)];
+});
+
+// ============================================================
+// Rate slider
+// ============================================================
+rateSlider.addEventListener('input', () => {
+  state.rate = parseFloat(rateSlider.value);
+  rateDisplay.textContent = state.rate.toFixed(1) + 'x';
+  // If currently reading, restart current block so new rate takes effect immediately
+  if (state.isReading && state.currentBlock >= 0) {
+    const idx = state.currentBlock;
+    speechSynthesis.cancel();
+    // Small delay to let cancel complete before re-speaking
+    setTimeout(() => {
+      if (state.isReading) readBlock(idx);
+    }, 50);
+  }
+});
+
+// ============================================================
+// Font size
+// ============================================================
+function updateFontSize(delta) {
+  state.fontSize = Math.max(12, Math.min(36, state.fontSize + delta));
+  document.documentElement.style.setProperty('--font-size', state.fontSize + 'px');
+  fontSizeDisplay.textContent = state.fontSize;
+  // Clear pretext cache since font size changed
+  state.pretextCache.clear();
+}
+
+$('btnFontInc').addEventListener('click', () => updateFontSize(2));
+$('btnFontDec').addEventListener('click', () => updateFontSize(-2));
+
+// ============================================================
+// File loading
+// ============================================================
+
+// Map of relative path -> blob URL for images in the folder
+const folderFiles = new Map();  // relativePath -> File
+const blobUrlCache = new Map(); // relativePath -> blobURL
+
+// Hidden folder input
+const folderInput = document.createElement('input');
+folderInput.type = 'file';
+folderInput.setAttribute('webkitdirectory', '');
+folderInput.style.display = 'none';
+document.body.appendChild(folderInput);
+
+// Open folder (supports images)
+$('btnOpen').addEventListener('click', () => folderInput.click());
+
+folderInput.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+
+  // Clear old blob URLs
+  blobUrlCache.forEach(url => URL.revokeObjectURL(url));
+  folderFiles.clear();
+  blobUrlCache.clear();
+
+  // Index all files by relative path
+  const mdFiles = [];
+  for (const file of files) {
+    const rel = file.webkitRelativePath;
+    const parts = rel.split('/');
+    const innerPath = parts.slice(1).join('/');
+    folderFiles.set(innerPath, file);
+    folderFiles.set('./' + innerPath, file);
+
+    if (/\.(md|markdown|txt)$/i.test(file.name)) {
+      mdFiles.push({ file, path: innerPath });
+    }
+  }
+
+  if (mdFiles.length === 0) {
+    statusLeft.textContent = 'No .md files found in folder';
+    return;
+  }
+
+  if (mdFiles.length > 1) showMdFileList(mdFiles);
+
+  // Try to open last opened file, otherwise first
+  const lastFileName = localStorage.getItem('md-reader-last-file');
+  const target = lastFileName && mdFiles.find(f => f.path === lastFileName || f.file.name === lastFileName);
+  loadFile(target ? target.file : mdFiles[0].file);
+});
+
+function showMdFileList(mdFiles) {
+  const header = document.createElement('div');
+  header.style.cssText = 'padding:8px;border-bottom:1px solid var(--border);font-size:13px;color:#888;';
+  header.textContent = `${mdFiles.length} Markdown files:`;
+
+  const list = document.createElement('div');
+  list.id = 'mdFileList';
+  mdFiles.forEach(({ file, path }) => {
+    const item = document.createElement('div');
+    item.className = 'bookmark-item';
+    item.innerHTML = `<div class="bm-info"><div class="bm-name">${escapeHtml(file.name)}</div><div class="bm-preview">${escapeHtml(path)}</div></div>`;
+    item.addEventListener('click', () => loadFile(file));
+    list.appendChild(item);
+  });
+
+  const old = $('mdFileList');
+  if (old) old.previousElementSibling?.remove(), old.remove();
+  bookmarkList.parentElement.insertBefore(header, bookmarkList);
+  bookmarkList.parentElement.insertBefore(list, bookmarkList);
+}
+
+// Open single file (no image support for relative paths)
+$('btnOpenFile').addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    folderFiles.clear();
+    blobUrlCache.forEach(url => URL.revokeObjectURL(url));
+    blobUrlCache.clear();
+    loadFile(file);
+  }
+});
+
+// Resolve image path from folder files
+function resolveImageUrl(src) {
+  if (/^(https?:|data:|blob:)/i.test(src)) return src;
+
+  const normalized = src.replace(/^\.\//, '').replace(/^\//, '');
+  const candidates = [src, normalized, './' + normalized];
+
+  for (const candidate of candidates) {
+    if (folderFiles.has(candidate)) {
+      if (!blobUrlCache.has(candidate)) {
+        blobUrlCache.set(candidate, URL.createObjectURL(folderFiles.get(candidate)));
+      }
+      return blobUrlCache.get(candidate);
+    }
+  }
+
+  const lowerNorm = normalized.toLowerCase();
+  for (const [key, file] of folderFiles) {
+    if (key.toLowerCase().replace(/^\.\//, '') === lowerNorm) {
+      if (!blobUrlCache.has(key)) {
+        blobUrlCache.set(key, URL.createObjectURL(file));
+      }
+      return blobUrlCache.get(key);
+    }
+  }
+
+  return src;
+}
+
+// Drag & Drop (support both files and folders)
+let dragCounter = 0;
+document.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  dragCounter++;
+  dragOverlay.classList.add('show');
+});
+document.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragOverlay.classList.remove('show');
+    dragCounter = 0;
+  }
+});
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dragOverlay.classList.remove('show');
+  dragCounter = 0;
+
+  const items = e.dataTransfer.items;
+  if (items && items.length > 0) {
+    const entry = items[0].webkitGetAsEntry?.();
+    if (entry && entry.isDirectory) {
+      await loadDirectoryEntry(entry);
+      return;
+    }
+  }
+
+  const file = e.dataTransfer.files[0];
+  if (file && /\.(md|markdown|txt)$/i.test(file.name)) {
+    folderFiles.clear();
+    blobUrlCache.forEach(url => URL.revokeObjectURL(url));
+    blobUrlCache.clear();
+    loadFile(file);
+  }
+});
+
+async function loadDirectoryEntry(dirEntry) {
+  folderFiles.clear();
+  blobUrlCache.forEach(url => URL.revokeObjectURL(url));
+  blobUrlCache.clear();
+  const mdFiles = [];
+
+  async function readDir(entry, path) {
+    if (entry.isFile) {
+      const file = await new Promise(resolve => entry.file(resolve));
+      const relPath = path ? path + '/' + file.name : file.name;
+      folderFiles.set(relPath, file);
+      folderFiles.set('./' + relPath, file);
+      if (/\.(md|markdown|txt)$/i.test(file.name)) {
+        mdFiles.push({ file, path: relPath });
+      }
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const entries = await new Promise(resolve => reader.readEntries(resolve));
+      for (const child of entries) {
+        await readDir(child, path ? path + '/' + entry.name : entry.name);
+      }
+    }
+  }
+
+  const reader = dirEntry.createReader();
+  const entries = await new Promise(resolve => reader.readEntries(resolve));
+  for (const child of entries) {
+    await readDir(child, '');
+  }
+
+  if (mdFiles.length === 0) {
+    statusLeft.textContent = 'No .md files found in folder';
+    return;
+  }
+  if (mdFiles.length > 1) showMdFileList(mdFiles);
+  loadFile(mdFiles[0].file);
+}
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    state.fileName = file.name;
+    state.rawMarkdown = e.target.result;
+    localStorage.setItem('md-reader-last-file', file.name);
+    renderMarkdown();
+    statusLeft.textContent = `Loaded: ${file.name}`;
+    document.title = `${file.name} - MD Reader`;
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
+// Render Markdown & Build readable blocks
+// ============================================================
+function renderMarkdown() {
+  stopReading();
+  state.pretextCache.clear();
+
+  const html = md.render(state.rawMarkdown);
+  contentArea.classList.remove('empty');
+  contentArea.innerHTML = `<div class="md-body" id="mdBody">${html}</div>`;
+
+  // Also resolve images from raw HTML <img> tags in markdown
+  const mdBody = $('mdBody');
+  mdBody.querySelectorAll('img').forEach(img => {
+    const src = img.getAttribute('src');
+    if (src) img.src = resolveImageUrl(src);
+  });
+
+  // Collect all readable text blocks
+  state.blocks = [];
+  let idx = 0;
+
+  function processNode(node) {
+    // Block-level text elements become readable blocks
+    const blockTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'TD', 'TH'];
+    if (blockTags.includes(node.tagName)) {
+      const text = node.textContent.trim();
+      if (text) {
+        node.classList.add('readable-block');
+        node.dataset.blockIndex = idx;
+        state.blocks.push({ el: node, text, index: idx });
+        idx++;
+      }
+      return; // Don't recurse into block elements
+    }
+    // Recurse into container elements
+    for (const child of node.children) {
+      processNode(child);
+    }
+  }
+
+  for (const child of mdBody.children) {
+    processNode(child);
+  }
+
+  // Click handler for readable blocks
+  mdBody.addEventListener('click', (e) => {
+    const block = e.target.closest('.readable-block');
+    if (block) {
+      const idx = parseInt(block.dataset.blockIndex);
+      startReadingFrom(idx);
+    }
+  });
+
+  statusRight.textContent = `${state.blocks.length} blocks`;
+
+  // Prepare pretext measurements in background
+  if (pretextModule) {
+    requestIdleCallback(() => preparePretextMeasurements());
+  }
+}
+
+// ============================================================
+// Pretext integration - measure text blocks for accurate info
+// ============================================================
+function preparePretextMeasurements() {
+  if (!pretextModule || !pretextModule.prepare) return;
+  const font = `${state.fontSize}px "Microsoft YaHei"`;
+  for (const block of state.blocks) {
+    if (!state.pretextCache.has(block.index)) {
+      try {
+        const prepared = pretextModule.prepare(block.text, font);
+        state.pretextCache.set(block.index, prepared);
+      } catch (e) {
+        // Pretext measurement failed for this block, skip
+      }
+    }
+  }
+}
+
+function getBlockReadingEstimate(blockIndex) {
+  // Use pretext layout data if available for reading time estimate
+  if (!pretextModule || !pretextModule.layout) return null;
+  const prepared = state.pretextCache.get(blockIndex);
+  if (!prepared) return null;
+  try {
+    const contentWidth = contentArea.clientWidth - 120; // account for padding
+    const maxWidth = Math.min(800, contentWidth);
+    const result = pretextModule.layout(prepared, maxWidth, state.fontSize * 1.8);
+    return { height: result.height, lineCount: result.lineCount };
+  } catch (e) {
+    return null;
+  }
+}
+
+// ============================================================
+// TTS - Speech Synthesis
+// ============================================================
+function stopReading() {
+  state.readingSeq++;  // invalidate all pending callbacks
+  speechSynthesis.cancel();
+  state.isReading = false;
+  state.utteranceQueue = [];
+  state.currentUtterance = null;
+  // Restore char-wrapped block to original HTML
+  restoreBlockHTML();
+  state.currentBlock = -1;
+  readingIndicator.classList.remove('active');
+  // Remove all reading highlights
+  document.querySelectorAll('.readable-block.reading').forEach(el => {
+    el.classList.remove('reading');
+  });
+  updateProgress();
+}
+
+function restoreBlockHTML() {
+  if (state.savedBlockHTML && state.currentBlock >= 0) {
+    const block = state.blocks[state.currentBlock];
+    if (block) block.el.innerHTML = state.savedBlockHTML;
+    state.savedBlockHTML = null;
+  }
+}
+
+// Wrap all text nodes inside an element with per-character spans
+function wrapTextChars(element) {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+  let globalIdx = 0;
+  for (const textNode of textNodes) {
+    const text = textNode.textContent;
+    if (!text) continue;
+    const fragment = document.createDocumentFragment();
+    for (const ch of text) {  // iterate by grapheme (handles emoji, CJK)
+      const span = document.createElement('span');
+      span.className = 'char-span';
+      span.dataset.ci = globalIdx++;
+      span.textContent = ch;
+      fragment.appendChild(span);
+    }
+    textNode.parentNode.replaceChild(fragment, textNode);
+  }
+  return globalIdx;
+}
+
+// Highlight chars from 0..upTo as "read"
+function highlightCharsUpTo(element, upTo) {
+  const spans = element.querySelectorAll('.char-span');
+  for (const span of spans) {
+    const ci = parseInt(span.dataset.ci);
+    span.classList.toggle('char-read', ci <= upTo);
+  }
+}
+
+function startReadingFrom(blockIndex) {
+  stopReading();
+  if (blockIndex < 0 || blockIndex >= state.blocks.length) return;
+
+  state.isReading = true;
+  state.currentBlock = blockIndex;
+  readingIndicator.classList.add('active');
+  statusLeft.textContent = 'Reading...';
+
+  readBlock(blockIndex);
+}
+
+function readBlock(blockIndex) {
+  if (!state.isReading || blockIndex >= state.blocks.length) {
+    // Finished reading all blocks
+    stopReading();
+    statusLeft.textContent = 'Finished reading';
+    return;
+  }
+
+  // Restore previous block's HTML if it was char-wrapped
+  restoreBlockHTML();
+
+  const block = state.blocks[blockIndex];
+  state.currentBlock = blockIndex;
+
+  // Highlight current block
+  document.querySelectorAll('.readable-block.reading').forEach(el => {
+    el.classList.remove('reading');
+  });
+  block.el.classList.add('reading');
+
+  // Scroll to current block
+  block.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  updateProgress();
+
+  // If follow highlight is on, wrap chars
+  let totalChars = 0;
+  if (state.followHighlight) {
+    state.savedBlockHTML = block.el.innerHTML;
+    totalChars = wrapTextChars(block.el);
+  }
+
+  // Split long text into sentences for reliable TTS
+  const sentences = splitIntoSentences(block.text);
+  const seq = state.readingSeq;  // capture current sequence
+
+  let sentenceIndex = 0;
+  let charOffset = 0;  // cumulative char offset across sentences
+
+  function speakNextSentence() {
+    // If sequence changed, this callback is stale — abort
+    if (seq !== state.readingSeq || !state.isReading) return;
+    if (sentenceIndex >= sentences.length) {
+      // All chars lit before moving on
+      if (state.followHighlight) {
+        highlightCharsUpTo(block.el, totalChars);
+      }
+      // Move to next block
+      readBlock(blockIndex + 1);
+      return;
+    }
+
+    const text = sentences[sentenceIndex];
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.voice = state.selectedVoice;
+    utterance.rate = state.rate;
+    utterance.lang = 'en-US';
+
+    // Follow highlight: use boundary event to light up chars
+    if (state.followHighlight) {
+      // Light up chars for this sentence start
+      if (charOffset > 0) highlightCharsUpTo(block.el, charOffset - 1);
+
+      utterance.onboundary = (e) => {
+        if (seq !== state.readingSeq) return;
+        if (e.name === 'word' || e.name === 'sentence') {
+          const upTo = charOffset + e.charIndex + (e.charLength || 1) - 1;
+          highlightCharsUpTo(block.el, upTo);
+        }
+      };
+    }
+
+    utterance.onend = () => {
+      if (seq !== state.readingSeq) return;
+      // Light up all chars of this sentence
+      if (state.followHighlight) {
+        highlightCharsUpTo(block.el, charOffset + [...text].length - 1);
+      }
+      charOffset += [...text].length;
+      sentenceIndex++;
+      speakNextSentence();
+    };
+
+    utterance.onerror = (e) => {
+      if (seq !== state.readingSeq) return;
+      if (e.error === 'canceled' || e.error === 'interrupted') return;
+      console.warn('TTS error:', e.error);
+      charOffset += [...text].length;
+      sentenceIndex++;
+      speakNextSentence();
+    };
+
+    state.currentUtterance = utterance;
+    speechSynthesis.speak(utterance);
+  }
+
+  speakNextSentence();
+}
+
+function splitIntoSentences(text) {
+  // Split by Chinese and English sentence endings, keep chunks reasonable
+  // This helps avoid the Chrome TTS cutoff bug on long utterances
+  const parts = [];
+  // Split by sentence-ending punctuation
+  const regex = /[^。！？.!?\n]+[。！？.!?\n]*/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const s = match[0].trim();
+    if (s) parts.push(s);
+  }
+  // If no sentence breaks found, split by commas or chunks
+  if (parts.length === 0 && text.trim()) {
+    const commaRegex = /[^，,；;：:]+[，,；;：:]*/g;
+    while ((match = commaRegex.exec(text)) !== null) {
+      const s = match[0].trim();
+      if (s) parts.push(s);
+    }
+  }
+  // Ultimate fallback: return whole text in chunks of ~100 chars
+  if (parts.length === 0 && text.trim()) {
+    for (let i = 0; i < text.length; i += 100) {
+      parts.push(text.slice(i, i + 100));
+    }
+  }
+  return parts;
+}
+
+function updateProgress() {
+  if (state.blocks.length === 0) {
+    progressFill.style.width = '0%';
+    return;
+  }
+  const pct = ((state.currentBlock + 1) / state.blocks.length * 100);
+  progressFill.style.width = `${Math.max(0, pct)}%`;
+
+  // Show layout info from pretext if available
+  const layoutInfo = getBlockReadingEstimate(state.currentBlock);
+  if (layoutInfo) {
+    statusRight.textContent = `${state.currentBlock + 1}/${state.blocks.length} | ${layoutInfo.lineCount} lines`;
+  } else {
+    statusRight.textContent = `${state.currentBlock + 1}/${state.blocks.length}`;
+  }
+}
+
+$('btnStop').addEventListener('click', () => {
+  stopReading();
+  statusLeft.textContent = 'Stopped';
+});
+
+// Follow highlight toggle
+$('btnFollowHighlight').addEventListener('click', () => {
+  state.followHighlight = !state.followHighlight;
+  $('btnFollowHighlight').classList.toggle('active', state.followHighlight);
+});
+
+// ============================================================
+// Bookmarks
+// ============================================================
+function renderBookmarks() {
+  if (state.bookmarks.length === 0) {
+    bookmarkList.innerHTML = '<div class="no-bookmarks">No bookmarks yet<br>Click "Bookmark" while reading to add one</div>';
+    return;
+  }
+  bookmarkList.innerHTML = '';
+  state.bookmarks.forEach((bm, i) => {
+    const item = document.createElement('div');
+    item.className = 'bookmark-item';
+    item.innerHTML = `
+      <div class="bm-info">
+        <div class="bm-name">${escapeHtml(bm.name)}</div>
+        <div class="bm-preview">${escapeHtml(bm.preview)}</div>
+      </div>
+      <button class="bm-delete" data-index="${i}" title="Delete">✕</button>
+    `;
+    item.querySelector('.bm-info').addEventListener('click', () => jumpToBookmark(bm));
+    item.querySelector('.bm-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteBookmark(i);
+    });
+    bookmarkList.appendChild(item);
+  });
+}
+
+function addBookmark() {
+  if (state.blocks.length === 0) {
+    statusLeft.textContent = 'Please open a file first';
+    return;
+  }
+
+  let blockIdx = state.currentBlock >= 0 ? state.currentBlock : 0;
+  // If not reading, find the block closest to current scroll position
+  if (!state.isReading) {
+    blockIdx = findVisibleBlockIndex();
+  }
+
+  const block = state.blocks[blockIdx];
+  if (!block) return;
+
+  const bm = {
+    name: state.fileName + ' #' + (state.bookmarks.length + 1),
+    fileName: state.fileName,
+    blockIndex: blockIdx,
+    preview: block.text.slice(0, 60),
+    scrollTop: contentArea.scrollTop,
+    timestamp: Date.now(),
+  };
+
+  state.bookmarks.push(bm);
+  saveBookmarks();
+  renderBookmarks();
+  statusLeft.textContent = `Bookmark added: ${bm.name}`;
+}
+
+function deleteBookmark(index) {
+  state.bookmarks.splice(index, 1);
+  saveBookmarks();
+  renderBookmarks();
+}
+
+function jumpToBookmark(bm) {
+  if (bm.fileName !== state.fileName) {
+    statusLeft.textContent = `Bookmark belongs to: ${bm.fileName}`;
+    return;
+  }
+  const blockIdx = bm.blockIndex;
+  if (blockIdx >= 0 && blockIdx < state.blocks.length) {
+    startReadingFrom(blockIdx);
+  }
+}
+
+function saveBookmarks() {
+  localStorage.setItem('md-reader-bookmarks', JSON.stringify(state.bookmarks));
+}
+
+function findVisibleBlockIndex() {
+  const scrollTop = contentArea.scrollTop;
+  const areaTop = contentArea.getBoundingClientRect().top;
+  for (let i = 0; i < state.blocks.length; i++) {
+    const rect = state.blocks[i].el.getBoundingClientRect();
+    if (rect.top >= areaTop) return i;
+  }
+  return 0;
+}
+
+$('btnAddBookmark').addEventListener('click', addBookmark);
+$('btnClearBookmarks').addEventListener('click', () => {
+  if (state.bookmarks.length && confirm('Clear all bookmarks?')) {
+    state.bookmarks = [];
+    saveBookmarks();
+    renderBookmarks();
+  }
+});
+
+$('btnToggleSidebar').addEventListener('click', () => {
+  sidebar.classList.toggle('collapsed');
+});
+
+renderBookmarks();
+
+// ============================================================
+// Dark mode
+// ============================================================
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  $('btnTheme').textContent = theme === 'dark' ? '☀️' : '🌙';
+  localStorage.setItem('md-reader-theme', theme);
+}
+
+$('btnTheme').addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme');
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+});
+
+// Restore saved theme or follow system preference
+const savedTheme = localStorage.getItem('md-reader-theme');
+if (savedTheme) {
+  applyTheme(savedTheme);
+} else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  applyTheme('dark');
+}
+
+// ============================================================
+// Keyboard shortcuts
+// ============================================================
+document.addEventListener('keydown', (e) => {
+  // Space: pause/resume (only when not typing in input)
+  if (e.code === 'Space' && e.target === document.body) {
+    e.preventDefault();
+    if (state.isReading) {
+      if (speechSynthesis.paused) {
+        speechSynthesis.resume();
+        statusLeft.textContent = 'Reading...';
+      } else {
+        speechSynthesis.pause();
+        statusLeft.textContent = 'Paused';
+      }
+    }
+  }
+  // Escape: stop
+  if (e.code === 'Escape' && state.isReading) {
+    stopReading();
+    statusLeft.textContent = 'Stopped';
+  }
+  // Ctrl+B: bookmark
+  if (e.ctrlKey && e.code === 'KeyB') {
+    e.preventDefault();
+    addBookmark();
+  }
+  // +/-: font size
+  if (e.ctrlKey && (e.code === 'Equal' || e.code === 'NumpadAdd')) {
+    e.preventDefault();
+    updateFontSize(2);
+  }
+  if (e.ctrlKey && (e.code === 'Minus' || e.code === 'NumpadSubtract')) {
+    e.preventDefault();
+    updateFontSize(-2);
+  }
+});
+
+// ============================================================
+// Chrome TTS keepalive workaround
+// Chrome pauses TTS after ~15s. Resume periodically.
+// ============================================================
+setInterval(() => {
+  if (state.isReading && speechSynthesis.speaking && !speechSynthesis.paused) {
+    speechSynthesis.pause();
+    speechSynthesis.resume();
+  }
+}, 10000);
+
+// ============================================================
+// Utility
+// ============================================================
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>
