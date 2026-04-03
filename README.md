@@ -33,6 +33,31 @@ A single-file, zero-build Markdown reader with built-in text-to-speech. Click an
 
 > **Tip:** Edge has the best support for Windows system voices.
 
+## Desktop App (Electron)
+
+A packaged Windows desktop app is available via Electron.
+
+**Requirements:** [Node.js](https://nodejs.org)
+
+```bash
+# Install dependencies
+npm install
+
+# Run in development
+npm start
+
+# Build portable Windows exe
+npm run build
+```
+
+The built app is output to `dist\win-unpacked\MD朗读器.exe`.  
+Copy the entire `win-unpacked` folder to any location and run the exe — no installation required.
+
+**Desktop-only features:**
+- Native file open dialog
+- Images load automatically when opening a single `.md` file (no need to open the folder)
+- Reading speed is remembered across sessions
+
 ## Tech Stack
 
 - **[markdown-it](https://github.com/markdown-it/markdown-it)** — Markdown parsing & rendering
@@ -77,6 +102,31 @@ MIT
 3. 点击文中任意段落开始朗读
 
 > **提示：** 推荐使用 Edge 浏览器，对 Windows 系统语音支持最好。
+
+## 桌面应用（Electron）
+
+支持打包为 Windows 独立桌面程序。
+
+**前置条件：** [Node.js](https://nodejs.org)
+
+```bash
+# 安装依赖
+npm install
+
+# 开发模式运行
+npm start
+
+# 打包 Windows 可执行文件
+npm run build
+```
+
+打包结果在 `dist\win-unpacked\MD朗读器.exe`。  
+将整个 `win-unpacked` 文件夹复制到任意位置即可使用，无需安装。
+
+**桌面版专属功能：**
+- 使用系统原生文件对话框打开文件
+- 打开单个 `.md` 文件时自动加载同目录图片，无需打开文件夹
+- 朗读语速跨会话记忆
 
 ## 技术栈
 
