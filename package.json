@@ -1,0 +1,40 @@
+{
+  "name": "md-reader",
+  "version": "1.0.0",
+  "description": "A single-file, zero-build Markdown reader with built-in text-to-speech. Click any paragraph to start reading aloud — with karaoke-style word highlighting, bookmarks, and a warm dark mode.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.mdreader.app",
+    "productName": "MD朗读器",
+    "files": [
+      "index.html",
+      "index_en.html",
+      "main.js",
+      "preload.js"
+    ],
+    "win": {
+      "target": "portable"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/3eyesgarfield/md-reader.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "types": "./neutralino.d.ts",
+  "bugs": {
+    "url": "https://github.com/3eyesgarfield/md-reader/issues"
+  },
+  "homepage": "https://github.com/3eyesgarfield/md-reader#readme",
+  "devDependencies": {
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1"
+  }
+}

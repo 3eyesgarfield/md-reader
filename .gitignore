@@ -1,0 +1,9 @@
+node_modules/
+dist/
+bin/
+resources/
+neutralino.js
+neutralino.d.ts
+neutralino.config.json
+neutralinojs.log
+.claude/

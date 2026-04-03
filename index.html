@@ -53,20 +53,21 @@ body {
 .toolbar {
   background: var(--toolbar-bg);
   border-bottom: 1px solid var(--border);
-  padding: 8px 16px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
   flex-shrink: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 .toolbar button {
-  padding: 6px 14px;
+  padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--btn-bg);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text);
   transition: all 0.15s;
   white-space: nowrap;
@@ -75,7 +76,7 @@ body {
 .toolbar button.active { background: var(--accent); color: white; border-color: var(--accent); }
 .toolbar .separator { width: 1px; height: 24px; background: var(--border); }
 .toolbar label { font-size: 13px; color: #666; white-space: nowrap; }
-.toolbar input[type="range"] { width: 100px; cursor: pointer; }
+.toolbar input[type="range"] { width: 80px; cursor: pointer; }
 .toolbar select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--btn-bg); color: var(--text); }
 .toolbar .font-size-display { font-size: 13px; color: #666; min-width: 36px; text-align: center; }
 
@@ -329,17 +330,14 @@ body {
   <button id="btnToggleSidebar" title="切换书签栏">📑</button>
   <button id="btnAddBookmark" title="添加书签">🔖 书签</button>
   <div class="separator"></div>
-  <label>字号</label>
-  <button id="btnFontDec">A-</button>
+  <button id="btnFontDec" title="缩小字号">A-</button>
   <span class="font-size-display" id="fontSizeDisplay">18</span>
-  <button id="btnFontInc">A+</button>
+  <button id="btnFontInc" title="放大字号">A+</button>
   <div class="separator"></div>
-  <label>语速</label>
-  <input type="range" id="rateSlider" min="0.5" max="10" step="0.1" value="1">
+  <input type="range" id="rateSlider" min="0.5" max="10" step="0.1" value="1" title="语速">
   <span id="rateDisplay">1.0x</span>
   <div class="separator"></div>
-  <label>语音</label>
-  <select id="voiceSelect"></select>
+  <select id="voiceSelect" title="选择语音"></select>
   <div class="separator"></div>
   <button id="btnStop" title="停止朗读">⏹ 停止</button>
   <div class="separator"></div>
@@ -402,7 +400,7 @@ const state = {
   currentBlock: -1,
   isReading: false,
   fontSize: 18,
-  rate: 1.0,
+  rate: parseFloat(localStorage.getItem('md-reader-rate') || '1.0'),
   selectedVoice: null,
   bookmarks: JSON.parse(localStorage.getItem('md-reader-bookmarks') || '[]'),
   utteranceQueue: [],
@@ -410,7 +408,7 @@ const state = {
   readingSeq: 0,  // sequence number to invalidate stale callbacks
   // Pretext prepared cache: Map<blockIndex, prepared>
   pretextCache: new Map(),
-  followHighlight: false,
+  followHighlight: true,
   savedBlockHTML: null,  // saved innerHTML before char wrapping
 };
 
@@ -451,6 +449,7 @@ md.renderer.rules.image = function(tokens, idx, options, env, self) {
   const srcIndex = token.attrIndex('src');
   if (srcIndex >= 0) {
     const originalSrc = token.attrs[srcIndex][1];
+    token.attrSet('data-src', originalSrc);
     token.attrs[srcIndex][1] = resolveImageUrl(originalSrc);
   }
   return defaultImageRender(tokens, idx, options, env, self);
@@ -506,6 +505,7 @@ voiceSelect.addEventListener('change', () => {
 rateSlider.addEventListener('input', () => {
   state.rate = parseFloat(rateSlider.value);
   rateDisplay.textContent = state.rate.toFixed(1) + 'x';
+  localStorage.setItem('md-reader-rate', state.rate);
   // If currently reading, restart current block so new rate takes effect immediately
   if (state.isReading && state.currentBlock >= 0) {
     const idx = state.currentBlock;
@@ -606,12 +606,32 @@ function showMdFileList(mdFiles) {
   bookmarkList.parentElement.insertBefore(list, bookmarkList);
 }
 
-// Open single file (no image support for relative paths)
-$('btnOpenFile').addEventListener('click', () => fileInput.click());
+// Open single file
+let electronFileDir = null; // set when opened via Electron native dialog
+
+$('btnOpenFile').addEventListener('click', async () => {
+  if (window.electronFS) {
+    const result = await window.electronFS.openFile();
+    if (!result) return;
+    electronFileDir = result.dir;
+    folderFiles.clear();
+    blobUrlCache.forEach(url => URL.revokeObjectURL(url));
+    blobUrlCache.clear();
+    state.fileName = result.name;
+    state.rawMarkdown = result.content;
+    localStorage.setItem('md-reader-last-file', result.name);
+    renderMarkdown();
+    statusLeft.textContent = `已加载: ${result.name}`;
+    document.title = `${result.name} - MD 朗读器`;
+  } else {
+    fileInput.click();
+  }
+});
 
 fileInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (file) {
+    electronFileDir = null;
     folderFiles.clear();
     blobUrlCache.forEach(url => URL.revokeObjectURL(url));
     blobUrlCache.clear();
@@ -619,9 +639,20 @@ fileInput.addEventListener('change', (e) => {
   }
 });
 
-// Resolve image path from folder files
+// Resolve image path from folder files or Electron native path
 function resolveImageUrl(src) {
   if (/^(https?:|data:|blob:)/i.test(src)) return src;
+
+  // In Electron with a known file directory, resolve via native FS
+  if (window.electronFS && electronFileDir) {
+    const rel = src.replace(/^\.\//, '').replace(/^\//, '');
+    const placeholder = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+    window.electronFS.resolveImage(electronFileDir, rel).then(dataUrl => {
+      if (!dataUrl) return;
+      document.querySelectorAll(`img[data-src="${CSS.escape(src)}"]`).forEach(img => { img.src = dataUrl; });
+    });
+    return placeholder;
+  }
 
   const normalized = src.replace(/^\.\//, '').replace(/^\//, '');
   const candidates = [src, normalized, './' + normalized];
@@ -1177,6 +1208,13 @@ $('btnTheme').addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme');
   applyTheme(current === 'dark' ? 'light' : 'dark');
 });
+
+// Restore rate slider position
+rateSlider.value = state.rate;
+rateDisplay.textContent = state.rate.toFixed(1) + 'x';
+
+// Restore followHighlight button state
+$('btnFollowHighlight').classList.toggle('active', state.followHighlight);
 
 // Restore saved theme or follow system preference
 const savedTheme = localStorage.getItem('md-reader-theme');
